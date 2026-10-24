@@ -61,6 +61,20 @@ describe('api proxy route', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('keeps the exact production origin requirement on the public API hostname', async () => {
+    const response = await GET(new NextRequest('https://api.vibreo.es/latest', {
+      headers: { Origin: 'https://www.vibreo.es' },
+    }), { params: Promise.resolve({ path: ['latest'] }) });
+    expect(response.status).toBe(403);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://vibreo.es');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects public API preflight requests without an origin', async () => {
+    const response = await OPTIONS(new NextRequest('https://api.vibreo.es/latest'));
+    expect(response.status).toBe(403);
+  });
+
   it('serves the API root health check through the Worker', async () => {
     fetchMock.mockResolvedValue(new Response('{"status":"ok"}'));
     const response = await GET(new NextRequest('https://api.vibreo.es/', {

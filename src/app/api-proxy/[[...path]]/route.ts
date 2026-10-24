@@ -38,10 +38,17 @@ function allowedOrigins() {
 
 function isAllowedOrigin(request: NextRequest) {
   const origin = request.headers.get('origin');
+  if (isPublicApiRequest(request)) return !origin || origin === PUBLIC_ORIGIN;
   return !origin || allowedOrigins().has(origin);
 }
 
+function isPublicApiRequest(request: NextRequest) {
+  return request.nextUrl.hostname === 'api.vibreo.es'
+    || request.headers.get('host') === 'api.vibreo.es';
+}
+
 function corsOrigin(request: NextRequest) {
+  if (isPublicApiRequest(request)) return PUBLIC_ORIGIN;
   const origin = request.headers.get('origin');
   return origin && allowedOrigins().has(origin) ? origin : PUBLIC_ORIGIN;
 }
@@ -110,7 +117,8 @@ function cdnCacheControl(path: string, status: number): string {
 }
 
 export async function OPTIONS(request: NextRequest) {
-  if (!isAllowedOrigin(request)) {
+  if (!isAllowedOrigin(request)
+    || (isPublicApiRequest(request) && !request.headers.get('origin'))) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: corsHeaders(request) });
   }
 
@@ -124,13 +132,14 @@ export async function GET(
   const { path } = await params;
   const apiPath = '/' + (path ?? []).join('/');
   const isVideo = apiPath.startsWith('/hero-video/');
-  const isPublicApiHost = request.nextUrl.hostname === 'api.vibreo.es'
-    || request.headers.get('host') === 'api.vibreo.es';
+  const isPublicApiHost = isPublicApiRequest(request);
   const referer = request.headers.get('referer');
   let allowedReferer = true;
   if (isVideo && referer) {
     try {
-      allowedReferer = allowedOrigins().has(new URL(referer).origin);
+      const refererOrigin = new URL(referer).origin;
+      allowedReferer = isPublicApiHost
+        ? refererOrigin === PUBLIC_ORIGIN : allowedOrigins().has(refererOrigin);
     } catch {
       allowedReferer = false;
     }
