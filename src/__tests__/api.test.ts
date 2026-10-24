@@ -179,7 +179,7 @@ describe('api', () => {
   it('builds hero video URLs without fetching and normalizes error messages', async () => {
     const api = await import('@/lib/api');
 
-    expect(api.getHeroVideoUrl('track-1')).toBe('https://api.vibreo.es/hero-video/track-1');
+    expect(api.getHeroVideoUrl('track-1')).toBe('/api-proxy/hero-video/track-1');
     expect(api.getErrorMessage(new Error('Custom failure'), 'Fallback')).toBe('Custom failure');
     expect(api.getErrorMessage('not an error', 'Fallback')).toBe('Fallback');
   });

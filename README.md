@@ -38,7 +38,19 @@ It brings together global and country-level chart views, lets you jump between s
 
 ## Where The Data Comes From
 
-The frontend reads from `https://api.vibreo.es`.
+The public API is `https://api.vibreo.es`. Vercel routes that hostname to the
+allowlisted API proxy in this repository. Browser data and hero videos use
+`/api-proxy` on the website's own origin, avoiding a separate browser connection
+to Cloudflare's edge. The proxy reads from the existing
+`vibreo-api.gonzalo-lopez-gil.workers.dev` Worker, so its upstream must not point
+back to `api.vibreo.es` (that would create a loop).
+
+The API DNS record is a DNS-only CNAME to `cname.vercel-dns.com`; the existing
+Cloudflare Worker and R2 bucket continue serving the data. JSON requests to the
+API hostname retain the `Origin: https://vibreo.es` requirement. Media requests
+retain origin/referer checks, stream without buffering, and forward range and
+media response headers. Public API and media responses bypass the shared CDN
+cache so access checks always run.
 
 The interface may show music and platform metadata related to Spotify, Apple Music, YouTube, iTunes, Shazam and Deezer when that information is returned by the API.
 

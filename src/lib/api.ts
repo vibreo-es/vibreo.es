@@ -116,7 +116,7 @@ export async function getMarketStreams() {
 }
 
 export function getHeroVideoUrl(trackId: string): string {
-  return `${DIRECT_API}/hero-video/${trackId}`;
+  return `/api-proxy/hero-video/${trackId}`;
 }
 
 export async function resolveHeroVideoTrack({

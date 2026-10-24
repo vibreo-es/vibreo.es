@@ -4,7 +4,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { GET, OPTIONS } from '@/app/api-proxy/[...path]/route';
+import { GET, OPTIONS } from '@/app/api-proxy/[[...path]]/route';
 
 describe('api proxy route', () => {
   const fetchMock = jest.fn();
@@ -12,6 +12,73 @@ describe('api proxy route', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     global.fetch = fetchMock;
+  });
+
+  it('streams videos without the Next data cache and preserves range headers', async () => {
+    fetchMock.mockResolvedValue(new Response('mp4', {
+      status: 206,
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Content-Range': 'bytes 0-2/3000',
+        'Content-Length': '3',
+        'Accept-Ranges': 'bytes',
+        ETag: '"video-v1"',
+      },
+    }));
+    const response = await GET(new NextRequest('https://vibreo.es/api-proxy/hero-video/track1', {
+      headers: { Range: 'bytes=0-2', 'If-Range': '"video-v1"', Referer: 'https://vibreo.es/' },
+    }), { params: Promise.resolve({ path: ['hero-video', 'track1'] }) });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://vibreo-api.gonzalo-lopez-gil.workers.dev/hero-video/track1',
+      expect.objectContaining({ cache: 'no-store', headers: expect.objectContaining({
+        Range: 'bytes=0-2', 'If-Range': '"video-v1"',
+      }) }),
+    );
+    expect(response.status).toBe(206);
+    expect(response.headers.get('Content-Type')).toBe('video/mp4');
+    expect(response.headers.get('Content-Range')).toBe('bytes 0-2/3000');
+    expect(response.headers.get('Content-Length')).toBe('3');
+    expect(response.headers.get('Accept-Ranges')).toBe('bytes');
+    expect(response.headers.get('ETag')).toBe('"video-v1"');
+    expect(response.headers.get('Vercel-CDN-Cache-Control')).toBe('no-store');
+    await expect(response.text()).resolves.toBe('mp4');
+  });
+
+  it('rejects video hotlinks from an unrelated referer', async () => {
+    const response = await GET(new NextRequest('https://vibreo.es/api-proxy/hero-video/track1', {
+      headers: { Referer: 'https://evil.example/' },
+    }), { params: Promise.resolve({ path: ['hero-video', 'track1'] }) });
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('retains the public API origin requirement after the host rewrite', async () => {
+    const response = await GET(new NextRequest('https://api.vibreo.es/latest'), {
+      params: Promise.resolve({ path: ['latest'] }),
+    });
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('serves the API root health check through the Worker', async () => {
+    fetchMock.mockResolvedValue(new Response('{"status":"ok"}'));
+    const response = await GET(new NextRequest('https://api.vibreo.es/', {
+      headers: { Origin: 'https://vibreo.es' },
+    }), { params: Promise.resolve({}) });
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/',
+      expect.objectContaining({ cache: 'no-store' }));
+  });
+
+  it('returns an uncached gateway error when the upstream is unreachable', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+    const response = await GET(new NextRequest('https://vibreo.es/api-proxy/latest'), {
+      params: Promise.resolve({ path: ['latest'] }),
+    });
+    expect(response.status).toBe(502);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({ error: 'upstream_unavailable' });
   });
 
   it('forwards allowed paths to the public API with client IP and CDN caching', async () => {
@@ -32,8 +99,9 @@ describe('api proxy route', () => {
       { params: Promise.resolve({ path: ['charting', 'songs'] }) },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vibreo.es/charting/songs?limit=5', {
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/charting/songs?limit=5', {
       cache: 'force-cache',
+      signal: expect.any(AbortSignal),
       headers: {
         Origin: 'https://vibreo.es',
         'X-Vibreo-Client-IP': '203.0.113.10',
@@ -63,7 +131,7 @@ describe('api proxy route', () => {
       { params: Promise.resolve({ path: ['charting', 'listeners'] }) },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vibreo.es/charting/listeners', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/charting/listeners', expect.objectContaining({
       next: { revalidate: 1800 },
     }));
     expect(response.status).toBe(200);
@@ -84,8 +152,9 @@ describe('api proxy route', () => {
       { params: Promise.resolve({ path: ['latest'] }) },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vibreo.es/latest', {
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/latest', {
       cache: 'no-store',
+      signal: expect.any(AbortSignal),
       headers: {
         Origin: 'https://vibreo.es',
         'X-Vibreo-Client-IP': 'unknown',
@@ -97,9 +166,9 @@ describe('api proxy route', () => {
   });
 
   it.each([
-    ['artist entity', ['artists', 'artist1'], 'https://api.vibreo.es/artists/artist1'],
-    ['song entity', ['songs', 'song1'], 'https://api.vibreo.es/songs/song1'],
-    ['album entity', ['albums', 'album1'], 'https://api.vibreo.es/albums/album1'],
+    ['artist entity', ['artists', 'artist1'], 'https://vibreo-api.gonzalo-lopez-gil.workers.dev/artists/artist1'],
+    ['song entity', ['songs', 'song1'], 'https://vibreo-api.gonzalo-lopez-gil.workers.dev/songs/song1'],
+    ['album entity', ['albums', 'album1'], 'https://vibreo-api.gonzalo-lopez-gil.workers.dev/albums/album1'],
   ])('does not cache %s responses through the proxy', async (_label, path, expectedUrl) => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), {
@@ -117,6 +186,7 @@ describe('api proxy route', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(expectedUrl, {
       cache: 'no-store',
+      signal: expect.any(AbortSignal),
       headers: {
         Origin: 'https://vibreo.es',
         'X-Vibreo-Client-IP': 'unknown',
@@ -142,7 +212,7 @@ describe('api proxy route', () => {
       { params: Promise.resolve({ path: ['charting', 'listeners', 'artist1'] }) },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vibreo.es/charting/listeners/artist1', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/charting/listeners/artist1', expect.objectContaining({
       next: { revalidate: 1800 },
     }));
     expect(response.status).toBe(200);
@@ -163,7 +233,7 @@ describe('api proxy route', () => {
       { params: Promise.resolve({ path: ['charting', 'artists', 'artist1'] }) },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vibreo.es/charting/artists/artist1', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/charting/artists/artist1', expect.objectContaining({
       next: { revalidate: 1800 },
     }));
     expect(response.status).toBe(200);
@@ -184,7 +254,7 @@ describe('api proxy route', () => {
       { params: Promise.resolve({ path: ['charting', 'albums', 'artist1'] }) },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vibreo.es/charting/albums/artist1', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/charting/albums/artist1', expect.objectContaining({
       next: { revalidate: 1800 },
     }));
     expect(response.status).toBe(200);
@@ -205,7 +275,7 @@ describe('api proxy route', () => {
       { params: Promise.resolve({ path: ['charting', 'youtube-links', 'artist1'] }) },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.vibreo.es/charting/youtube-links/artist1', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('https://vibreo-api.gonzalo-lopez-gil.workers.dev/charting/youtube-links/artist1', expect.objectContaining({
       next: { revalidate: 1800 },
     }));
     expect(response.status).toBe(200);
@@ -227,7 +297,7 @@ describe('api proxy route', () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.vibreo.es/charting/hero-video?artist_ids=artist1',
+      'https://vibreo-api.gonzalo-lopez-gil.workers.dev/charting/hero-video?artist_ids=artist1',
       expect.objectContaining({ next: { revalidate: 300 } }),
     );
     expect(response.status).toBe(200);

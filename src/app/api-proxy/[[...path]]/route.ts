@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_ORIGIN = 'https://api.vibreo.es';
+// Keep the upstream independent of api.vibreo.es, which is served by this proxy.
+const API_ORIGIN = 'https://vibreo-api.gonzalo-lopez-gil.workers.dev';
 const PUBLIC_ORIGIN = 'https://vibreo.es';
 
 const ALLOWED_API_PATHS = [
+  /^\/$/,
+  /^\/health$/,
+  /^\/hero-video\/[a-z0-9]+$/i,
   /^\/latest$/,
   /^\/search$/,
   /^\/charting\/hero-video$/,
@@ -46,7 +50,8 @@ function corsHeaders(request: NextRequest) {
   return {
     'Access-Control-Allow-Origin': corsOrigin(request),
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Range, If-Range',
+    'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Range, Content-Length, ETag',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -72,6 +77,11 @@ function upstreamHeaders(request: NextRequest): HeadersInit {
     headers['X-Vibreo-Proxy-Secret'] = proxySecret;
   }
 
+  for (const name of ['Range', 'If-Range']) {
+    const value = request.headers.get(name);
+    if (value) headers[name] = value;
+  }
+
   return headers;
 }
 
@@ -89,7 +99,7 @@ function isMutableEntityPath(path: string): boolean {
 }
 
 function shouldBypassCache(path: string): boolean {
-  return path === '/latest' || isMutableEntityPath(path);
+  return path === '/' || path === '/health' || path === '/latest' || isMutableEntityPath(path);
 }
 
 function cdnCacheControl(path: string, status: number): string {
@@ -109,14 +119,27 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
+  { params }: { params: Promise<{ path?: string[] }> },
 ) {
   const { path } = await params;
-  const apiPath = '/' + path.join('/');
+  const apiPath = '/' + (path ?? []).join('/');
+  const isVideo = apiPath.startsWith('/hero-video/');
+  const isPublicApiHost = request.nextUrl.hostname === 'api.vibreo.es'
+    || request.headers.get('host') === 'api.vibreo.es';
+  const referer = request.headers.get('referer');
+  let allowedReferer = true;
+  if (isVideo && referer) {
+    try {
+      allowedReferer = allowedOrigins().has(new URL(referer).origin);
+    } catch {
+      allowedReferer = false;
+    }
+  }
   const queryString = request.nextUrl.search;
   const url = `${API_ORIGIN}${apiPath}${queryString}`;
 
-  if (!isAllowedOrigin(request)) {
+  if (!isAllowedOrigin(request) || !allowedReferer
+    || (isPublicApiHost && !isVideo && !request.headers.get('origin'))) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: corsHeaders(request) });
   }
 
@@ -124,7 +147,7 @@ export async function GET(
     return NextResponse.json({ error: 'not_found' }, { status: 404, headers: corsHeaders(request) });
   }
 
-  const fetchOptions: RequestInit & { next?: { revalidate: number } } = shouldBypassCache(apiPath)
+  const fetchOptions: RequestInit & { next?: { revalidate: number } } = (isVideo || shouldBypassCache(apiPath))
     ? {
         headers: upstreamHeaders(request),
         cache: 'no-store',
@@ -135,15 +158,42 @@ export async function GET(
         next: { revalidate: revalidateSeconds(apiPath) },
       };
 
-  const res = await fetch(url, fetchOptions);
+  let res: Response;
+  try {
+    res = await fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(15_000) });
+  } catch {
+    return NextResponse.json({ error: 'upstream_unavailable' }, {
+      status: 502,
+      headers: { ...corsHeaders(request), 'Cache-Control': 'no-store' },
+    });
+  }
+
+  const upstreamResponseHeaders: Record<string, string> = {};
+  for (const name of ['Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Window']) {
+    const value = res.headers.get(name);
+    if (value) upstreamResponseHeaders[name] = value;
+  }
+  if (isVideo) {
+    for (const name of ['Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag', 'Last-Modified']) {
+      const value = res.headers.get(name);
+      if (value) upstreamResponseHeaders[name] = value;
+    }
+  }
+  // Run origin/referer checks for every public API and media request. Never
+  // populate a complete-response cache with a partial video response.
+  const cdnCache = isPublicApiHost || isVideo || request.headers.has('range') || res.status === 206
+    ? 'no-store' : cdnCacheControl(apiPath, res.status);
 
   return new NextResponse(res.body, {
     status: res.status,
     headers: {
       'Content-Type': res.headers.get('Content-Type') || 'application/json',
-      'Cache-Control': res.status >= 400 ? 'no-store' : 'public, max-age=0, must-revalidate',
-      'CDN-Cache-Control': cdnCacheControl(apiPath, res.status),
-      'Vercel-CDN-Cache-Control': cdnCacheControl(apiPath, res.status),
+      'Cache-Control': res.status >= 400 ? 'no-store'
+        : isVideo ? 'private, max-age=86400' : 'public, max-age=0, must-revalidate',
+      'CDN-Cache-Control': cdnCache,
+      'Vercel-CDN-Cache-Control': cdnCache,
+      'X-Content-Type-Options': 'nosniff',
+      ...upstreamResponseHeaders,
       ...corsHeaders(request),
     },
   });

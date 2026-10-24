@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return {
+      beforeFiles: [{
+        source: '/:path*',
+        has: [{ type: 'host', value: 'api.vibreo.es' }],
+        destination: '/api-proxy/:path*',
+      }],
+    };
+  },
   images: {
     unoptimized: true,
     formats: ['image/avif', 'image/webp'],
