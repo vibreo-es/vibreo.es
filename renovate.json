@@ -1,0 +1,60 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Madrid",
+  "schedule": [
+    "* 3-7 * * 1"
+  ],
+  "automerge": false,
+  "platformAutomerge": false,
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 4,
+  "prHourlyLimit": 2,
+  "separateMajorMinor": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "* 3-7 * * 1"
+    ]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "automerge": false,
+    "schedule": [],
+    "minimumReleaseAge": null,
+    "dependencyDashboardApproval": false,
+    "prCreation": "immediate"
+  },
+  "packageRules": [
+    {
+      "description": "Group routine updates; major migrations remain separate.",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "routine dependencies"
+    },
+    {
+      "description": "Keep the reviewed Node 24 LTS branch. CI warns 90 days before EOL.",
+      "matchDatasources": [
+        "node-version"
+      ],
+      "allowedVersions": "24.x"
+    },
+    {
+      "matchPackageNames": [
+        "@types/node"
+      ],
+      "allowedVersions": "<25"
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions"
+    }
+  ]
+}
