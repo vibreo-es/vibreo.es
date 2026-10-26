@@ -25,3 +25,11 @@ ESLint 9 reached end-of-life on 2026-08-06. The project uses ESLint 10 with the 
 References: https://eslint.org/version-support/ and https://eslint.org/docs/latest/use/migrate-to-10.0.0
 
 The `babel-plugin-istanbul > test-exclude` override uses maintained `test-exclude` 8 and `glob` 13 instead of deprecated `glob` 10. The complete Jest coverage run verifies instrumentation and thresholds. Remove this override when Istanbul updates its direct range.
+
+## Major dependency migration (2026-10-26)
+
+All production dependencies and direct development tools were reviewed against their current stable major. CI uses pinned Actions v7 and Ubuntu 26.04. Node remains on the supported, reviewed Node 24 LTS branch; `@types/node` follows that runtime. Every CI audit also rejects deprecated packages in the lockfile.
+
+`npm run typecheck` runs the native TypeScript 7 `tsc` provided by the `@typescript/native` npm alias. The `typescript` import is aliased to the official `@typescript/typescript6` compatibility package because tooling still needs its compiler API. Its separate binary is `tsc6`; do not replace the native checker with it. This follows Microsoft's TypeScript 7 migration guidance.
+
+Jest uses `jest.environment.js`, a thin subclass of the official `@jest/environment-jsdom-abstract`, with current jsdom 30. The legacy `jest-environment-jsdom` dependency was removed, eliminating `whatwg-encoding`. The full component, interaction and coverage suite validates the environment.
