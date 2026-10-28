@@ -9,6 +9,7 @@
     "lint": "eslint && node .github/check-lint.mjs",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "test:dependency-security": "node --test .github/dependency-security.test.mjs",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },
@@ -21,6 +22,7 @@
     "recharts": "^3.8.0"
   },
   "devDependencies": {
+    "deepmerge": "file:vendor/deepmerge",
     "@eslint/compat": "^2.1.1",
     "@jest/globals": "^30.3.0",
     "@tailwindcss/postcss": "^4",
@@ -54,7 +56,8 @@
     },
     "babel-plugin-istanbul": {
       "test-exclude": "^8.0.0"
-    }
+    },
+    "deepmerge": "$deepmerge"
   },
   "engines": {
     "node": "24.x"

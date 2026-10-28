@@ -25,6 +25,7 @@ jobs:
       - run: node .github/check-runtime.mjs
       - run: npm ci
       - run: node .github/check-dependencies.mjs
+      - run: npm run test:dependency-security
       - run: npm audit
       - run: npm run typecheck
       - run: npm test -- --ci --coverage

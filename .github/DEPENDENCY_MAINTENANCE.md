@@ -33,3 +33,13 @@ All production dependencies and direct development tools were reviewed against t
 `npm run typecheck` runs the native TypeScript 7 `tsc` provided by the `@typescript/native` npm alias. The `typescript` import is aliased to the official `@typescript/typescript6` compatibility package because tooling still needs its compiler API. Its separate binary is `tsc6`; do not replace the native checker with it. This follows Microsoft's TypeScript 7 migration guidance.
 
 Jest uses `jest.environment.js`, a thin subclass of the official `@jest/environment-jsdom-abstract`, with current jsdom 30. The legacy `jest-environment-jsdom` dependency was removed, eliminating `whatwg-encoding`. The full component, interaction and coverage suite validates the environment.
+
+## Temporary deepmerge security remediation (2026-10-28)
+
+`jest-config` resolves `deepmerge` to the reviewed local fork in
+[`vendor/deepmerge`](../vendor/deepmerge/README.md), which blocks CVE-2026-93753.
+Upstream has no patched release as of this date. The fork changes only the
+`__proto__` key guards and preserves its MIT license. CI tests the actual Jest
+dependency and exploit paths before the unchanged full audit; no severity threshold
+or advisory exclusion is used. Check upstream releases during maintenance and
+follow the linked removal procedure once a supported replacement exists.

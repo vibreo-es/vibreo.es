@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Preserve the upstream CommonJS bundle; dependency-security tests cover its patch.
+    "vendor/deepmerge/index.cjs",
   ]),
   {
     rules: {
