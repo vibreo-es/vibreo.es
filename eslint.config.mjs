@@ -1,7 +1,10 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import { fixupConfigRules } from "@eslint/compat";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import "./.github/register-eslint-minimatch.mjs";
+
+// Install the scoped CommonJS compatibility hook before loading legacy plugins.
+const { default: nextVitals } = await import("eslint-config-next/core-web-vitals");
+const { default: nextTs } = await import("eslint-config-next/typescript");
 
 const eslintConfig = defineConfig([
   // Preserve Next/React/accessibility checks while legacy plugins migrate to ESLint 10.
@@ -15,6 +18,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Preserve the upstream CommonJS bundle; dependency-security tests cover its patch.
     "vendor/deepmerge/index.cjs",
+    // The CommonJS bridge is exercised by dependency and ESLint integration tests.
+    "vendor/minimatch-compat/index.cjs",
   ]),
   {
     rules: {

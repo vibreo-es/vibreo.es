@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { realpathSync } from 'node:fs';
+import { realpathSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import './register-eslint-minimatch.mjs';
 
 const require = createRequire(import.meta.url);
 const jestRequire = createRequire(require.resolve('jest-config'));
@@ -87,3 +90,64 @@ test('Jest configuration merging rejects the exploit and preserves valid globals
   assert.equal(result.globals.existing, true);
   assert.equal(result.globals.added, true);
 });
+
+const { glob } = jestRequire('glob');
+const globRequire = createRequire(jestRequire.resolve('glob'));
+const officialMatcher = globRequire('minimatch');
+const nextRequire = createRequire(require.resolve('eslint-config-next'));
+
+test('glob stops directory traversal when cancelled during the first read', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'vibreo-glob-abort-'));
+  try {
+    for (let i = 0; i < 4; i++) {
+      mkdirSync(join(cwd, `dir${i}`));
+      writeFileSync(join(cwd, `dir${i}`, 'file.txt'), 'fixture');
+    }
+    const controller = new AbortController();
+    let reads = 0;
+    const reason = new Error('cancelled by caller');
+    await assert.rejects(glob('**/*', {
+      cwd,
+      signal: controller.signal,
+      fs: {
+        readdir(path, options, callback) {
+          reads++;
+          const entries = readdirSync(path, options);
+          queueMicrotask(() => {
+            controller.abort(reason);
+            callback(null, entries);
+          });
+        },
+      },
+    }), error => error === reason);
+    // Drain callbacks already queued when the cancellation was observed.
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(reads, 1, 'cancelled traversal continued reading child directories');
+    assert.equal((await glob('**/*.txt', { cwd })).length, 4);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('minimatch bounds globstar preprocessing by the configured expansion budget', () => {
+  const matcher = new officialMatcher.Minimatch('**/../a/b/'.repeat(8) + 'file.txt', {
+    optimizationLevel: 2,
+    braceExpandMax: 16,
+  });
+  assert(matcher.globParts.length <= 16, `expanded to ${matcher.globParts.length} patterns`);
+  assert.equal(officialMatcher.minimatch('src/a.tsx', 'src/**/*.{ts,tsx}'), true);
+  assert.equal(officialMatcher.minimatch('src/a.js', 'src/**/*.{ts,tsx}'), false);
+});
+
+for (const plugin of ['react', 'jsx-a11y', 'import']) {
+  test(`ESLint ${plugin} uses the official matcher through the legacy interface`, () => {
+    const pluginRequire = createRequire(nextRequire.resolve(`eslint-plugin-${plugin}`));
+    const matcher = pluginRequire('minimatch');
+    assert.equal(typeof matcher, 'function');
+    assert.equal(matcher.Minimatch, officialMatcher.Minimatch);
+    assert.equal(matcher('src/a.tsx', 'src/**/*.tsx'), true);
+    assert.equal(matcher('src/a.js', 'src/**/*.tsx'), false);
+    assert.equal(matcher.makeRe('react/*').test('react/private'), true);
+    assert.equal(matcher.makeRe('react/*').test('react'), false);
+  });
+}

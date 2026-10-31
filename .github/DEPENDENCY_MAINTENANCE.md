@@ -24,7 +24,23 @@ ESLint 9 reached end-of-life on 2026-08-06. The project uses ESLint 10 with the 
 
 References: https://eslint.org/version-support/ and https://eslint.org/docs/latest/use/migrate-to-10.0.0
 
-The `babel-plugin-istanbul > test-exclude` override uses maintained `test-exclude` 8 and `glob` 13 instead of deprecated `glob` 10. The complete Jest coverage run verifies instrumentation and thresholds. Remove this override when Istanbul updates its direct range.
+The `babel-plugin-istanbul > test-exclude` override uses maintained `test-exclude` 8. The complete Jest coverage run verifies instrumentation and thresholds. Remove this override when Istanbul updates its direct range.
+
+## Glob and minimatch security updates (2026-10-31)
+
+Overrides require official `glob >=14.0.3 <15` and `minimatch >=11.0.3 <12`,
+fixing CVE-2026-118773 (work continuing after cancellation) and CVE-2026-118764
+(pattern amplification). Keep the full audit enabled without exclusions.
+
+The React, import and accessibility plugins still call the old CommonJS function
+export. The ESLint configuration registers a Node 24 resolution hook scoped to
+those three callers, using [`vendor/minimatch-compat`](../vendor/minimatch-compat/README.md).
+The adapter delegates calls and the import plugin's `makeRe().test()` interface
+to the official patched matcher. Modern consumers load the npm package directly. No vulnerable
+matching implementation is retained. Security tests exercise cancellation and
+each plugin's resolved matching interface; lint, coverage and build verify the
+major dependency updates together. Remove overrides as upstream consumers adopt
+the secure versions and modern exports.
 
 ## Major dependency migration (2026-10-26)
 
