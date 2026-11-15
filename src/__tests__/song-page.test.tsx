@@ -146,6 +146,6 @@ describe('SongPage', () => {
     expect(await screen.findByRole('heading', { name: 'back to friends' })).toBeInTheDocument();
     expect(screen.getByText('Charting in 1 country')).toBeInTheDocument();
     expect(screen.getByText('#7 Global')).toBeInTheDocument();
-    await waitFor(() => expect(mockedGetHeroVideoUrl).toHaveBeenCalledWith('primary-track'));
+    await waitFor(() => expect(mockedGetHeroVideoUrl).toHaveBeenCalledWith('primary-track', 'primary-video'));
   });
 });
