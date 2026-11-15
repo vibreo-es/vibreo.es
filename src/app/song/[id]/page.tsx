@@ -160,7 +160,7 @@ export default function SongPage() {
 
   const primaryTrackUri = song.primary_uri || song.track_uri || `spotify:track:${id}`;
   const primaryTrackId = extractId(primaryTrackUri);
-  const heroVideoSrc = ytLinks?.v ? getHeroVideoUrl(primaryTrackId) : null;
+  const heroVideoSrc = ytLinks?.v ? getHeroVideoUrl(primaryTrackId, ytLinks.v) : null;
 
   return (
     <main className="min-h-screen">

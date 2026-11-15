@@ -115,8 +115,9 @@ export async function getMarketStreams() {
   return apiFetch<Record<string, number>>("/charting/market-streams");
 }
 
-export function getHeroVideoUrl(trackId: string): string {
-  return `/api-proxy/hero-video/${trackId}`;
+export function getHeroVideoUrl(trackId: string, sourceVideoId?: string): string {
+  const path = `/api-proxy/hero-video/${trackId}`;
+  return sourceVideoId ? `${path}?v=${encodeURIComponent(sourceVideoId)}` : path;
 }
 
 export async function resolveHeroVideoTrack({

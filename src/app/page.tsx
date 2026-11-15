@@ -193,7 +193,7 @@ export default function Home() {
       {/* ─── Section 1: Hero Spotlight ─────────────────────────────── */}
       {hero && (() => {
         const heroTrackId = hero.uri.split(':').pop() || '';
-        const heroVideoSrc = ytLinksMap[hero.uri]?.v ? getHeroVideoUrl(heroTrackId) : null;
+        const heroVideoSrc = ytLinksMap[hero.uri]?.v ? getHeroVideoUrl(heroTrackId, ytLinksMap[hero.uri].v) : null;
 
         return (
         <section className="relative">

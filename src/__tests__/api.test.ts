@@ -180,6 +180,9 @@ describe('api', () => {
     const api = await import('@/lib/api');
 
     expect(api.getHeroVideoUrl('track-1')).toBe('/api-proxy/hero-video/track-1');
+    expect(api.getHeroVideoUrl('track-1', 'correct-video')).toBe('/api-proxy/hero-video/track-1?v=correct-video');
+    expect(api.getHeroVideoUrl('track-1', 'old-video')).not.toBe(api.getHeroVideoUrl('track-1', 'correct-video'));
+    expect(api.getHeroVideoUrl('track-1', 'video&other=1')).toBe('/api-proxy/hero-video/track-1?v=video%26other%3D1');
     expect(api.getErrorMessage(new Error('Custom failure'), 'Fallback')).toBe('Custom failure');
     expect(api.getErrorMessage('not an error', 'Fallback')).toBe('Fallback');
   });

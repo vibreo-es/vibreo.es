@@ -270,7 +270,7 @@ export default function ChartTypeDatePage() {
     if (numberOneSong) {
       const yt = ytLinksMap[numberOneSong.uri];
       if (!yt?.v) return null;
-      return getHeroVideoUrl(extractId(numberOneSong.uri));
+      return getHeroVideoUrl(extractId(numberOneSong.uri), yt.v);
     }
     if (!numberOneArtist || !artistHeroVideoTrackId) return null;
     return getHeroVideoUrl(artistHeroVideoTrackId);
