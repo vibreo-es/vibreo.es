@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
-async function request(url, {status = 200, headers = {}} = {}) {
-  const response = await fetch(url, {headers, signal: AbortSignal.timeout(30000)});
+async function request(url, {status = 200, headers = {}, timeout = 30000} = {}) {
+  const response = await fetch(url, {headers, signal: AbortSignal.timeout(timeout)});
   assert.equal(response.status, status, `${url}: unexpected HTTP status`);
   console.log(JSON.stringify({url, status: response.status}));
   return response;
@@ -28,3 +28,15 @@ for (const [kind, period] of [['songs', 'daily'], ['artists', 'daily'], ['albums
   console.log(JSON.stringify({kind, rows: rows.length}));
 }
 console.log(JSON.stringify({latest}));
+
+// HTTP 200 alone misses upstream body resets: consume and validate the full
+// catalogue through both public surfaces used by the site and API clients.
+for (const url of [`${base}/charting/youtube-links`, 'https://api.vibreo.es/charting/youtube-links']) {
+  const links = await (await request(url, {headers, timeout: 120000})).json();
+  assert(links && typeof links === 'object' && !Array.isArray(links), `${url}: invalid catalogue`);
+  const entries = Object.entries(links);
+  assert(entries.length >= 1000, `${url}: incomplete catalogue`);
+  assert(entries.every(([uri, link]) => uri.startsWith('spotify:track:') && link && typeof link === 'object'),
+    `${url}: invalid track links`);
+  console.log(JSON.stringify({url, catalogEntries: entries.length}));
+}

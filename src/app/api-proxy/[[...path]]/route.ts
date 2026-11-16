@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchCatalog } from '@/lib/catalog-proxy';
+
+// Two bounded catalogue downloads plus delivery of the validated response.
+export const maxDuration = 120;
 
 // Keep the upstream independent of api.vibreo.es, which is served by this proxy.
 const API_ORIGIN = 'https://vibreo-api.gonzalo-lopez-gil.workers.dev';
@@ -169,7 +173,9 @@ export async function GET(
 
   let res: Response;
   try {
-    res = await fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(15_000) });
+    res = apiPath === '/charting/youtube-links'
+      ? await fetchCatalog(url, upstreamHeaders(request), request.signal)
+      : await fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(15_000) });
   } catch {
     return NextResponse.json({ error: 'upstream_unavailable' }, {
       status: 502,
