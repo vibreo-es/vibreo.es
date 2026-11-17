@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Preserve the upstream CommonJS bundle; dependency-security tests cover its patch.
     "vendor/deepmerge/index.cjs",
+    // Upstream CommonJS sources, verified by the CVE and consumer regressions.
+    "vendor/picomatch/**/*.js",
     // The CommonJS bridge is exercised by dependency and ESLint integration tests.
     "vendor/minimatch-compat/index.cjs",
   ]),

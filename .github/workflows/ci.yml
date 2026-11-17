@@ -26,6 +26,7 @@ jobs:
       - run: npm ci
       - run: node .github/check-dependencies.mjs
       - run: npm run test:dependency-security
+      - run: node .github/check-picomatch-advisories.mjs
       - run: npm audit
       - run: npm run typecheck
       - run: npm test -- --ci --coverage
